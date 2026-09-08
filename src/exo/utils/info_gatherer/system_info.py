@@ -109,6 +109,7 @@ async def get_network_interfaces() -> list[NetworkInterfaceInfo]:
     interface_types = await _get_interface_types_from_networksetup()
 
     for iface, services in psutil.net_if_addrs().items():
+        iface_type = interface_types.get(iface, _guess_interface_type(iface))
         for service in services:
             match service.family:
                 case socket.AF_INET | socket.AF_INET6:
@@ -116,7 +117,7 @@ async def get_network_interfaces() -> list[NetworkInterfaceInfo]:
                         NetworkInterfaceInfo(
                             name=iface,
                             ip_address=service.address,
-                            interface_type=interface_types.get(iface, "unknown"),
+                            interface_type=iface_type,
                         )
                     )
                 case _:
@@ -125,16 +126,32 @@ async def get_network_interfaces() -> list[NetworkInterfaceInfo]:
     return interfaces_info
 
 
+def _guess_interface_type(iface: str) -> InterfaceType:
+    """Best-effort type from the adapter name (Windows/Linux, PAIR-style)."""
+    lowered = iface.lower()
+    if any(token in lowered for token in ("wi-fi", "wifi", "wlan", "wireless")):
+        return "wifi"
+    if any(token in lowered for token in ("ethernet", "eth", "lan", "local area")):
+        return "ethernet"
+    return "unknown"
+
+
 async def get_model_and_chip() -> tuple[str, str]:
-    """Get Mac system information using system_profiler."""
+    """Get machine model and accelerator/chip names."""
     model = "Unknown Model"
     chip = "Unknown Chip"
 
-    # TODO: better non mac support
     if sys.platform == "win32":
         uname = platform.uname()
-        model = f"{uname.system} {uname.release}".strip() or "Windows PC"
-        chip = uname.processor or uname.machine or "Unknown Chip"
+        model = (await _windows_computer_model()) or (
+            f"{uname.system} {uname.release}".strip() or "Windows PC"
+        )
+        chip = (
+            (await _windows_gpu_name())
+            or uname.processor
+            or uname.machine
+            or "Unknown Chip"
+        )
         return (model, chip)
 
     if sys.platform != "darwin":
@@ -162,3 +179,44 @@ async def get_model_and_chip() -> tuple[str, str]:
     chip = chip_line.split(": ")[1] if chip_line else "Unknown Chip"
 
     return (model, chip)
+
+
+async def _windows_computer_model() -> str | None:
+    try:
+        process = await run_process(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance -ClassName Win32_ComputerSystem).Model",
+            ],
+            check=False,
+        )
+    except OSError:
+        return None
+    if process.returncode != 0:
+        return None
+    model = process.stdout.decode("utf-8", errors="replace").strip()
+    return model or None
+
+
+async def _windows_gpu_name() -> str | None:
+    try:
+        process = await run_process(
+            [
+                "nvidia-smi",
+                "--query-gpu=name",
+                "--format=csv,noheader",
+            ],
+            check=False,
+        )
+    except OSError:
+        return None
+    if process.returncode != 0:
+        return None
+    names = [
+        line.strip()
+        for line in process.stdout.decode("utf-8", errors="replace").splitlines()
+        if line.strip()
+    ]
+    return ", ".join(names) if names else None

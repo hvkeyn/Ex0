@@ -8,10 +8,21 @@ _EXO_HOME_ENV = os.environ.get("EXO_HOME", None)
 
 
 def _get_xdg_dir(env_var: str, fallback: str) -> Path:
-    """Get XDG directory, prioritising EXO_HOME environment variable if its set. On non-Linux platforms, default to ~/.exo."""
+    """Get XDG directory, prioritising EXO_HOME if set.
+
+    On Windows the default is ``%LOCALAPPDATA%\\exo`` (same layout NVIDIA PAIR
+    uses for app data). On other non-Linux platforms, default to ``~/.exo``.
+    """
 
     if _EXO_HOME_ENV is not None:
-        return Path.home() / _EXO_HOME_ENV
+        override = Path(_EXO_HOME_ENV).expanduser()
+        return override if override.is_absolute() else Path.home() / override
+
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "exo"
+        return Path.home() / "AppData" / "Local" / "exo"
 
     if sys.platform != "linux":
         return Path.home() / ".exo"
