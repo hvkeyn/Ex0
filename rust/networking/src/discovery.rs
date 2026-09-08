@@ -18,6 +18,18 @@ use zenoh::config::ZenohId;
 const GROUP: Ipv6Addr = Ipv6Addr::new(0xff12, 0, 0, 0, 0, 0, 0xe0a1, 0xde89);
 const MAGIC: [u8; 3] = *b"EXO";
 
+/// `netwatcher::WatchHandle` wraps a raw OS handle (`*mut c_void` on Windows)
+/// which is not automatically `Send`/`Sync`. The handle is a kernel object and
+/// is only stored so interface-change callbacks keep running.
+struct SendWatchHandle(WatchHandle);
+
+// SAFETY: the wrapped handle is an OS watcher resource. It is not accessed
+// concurrently (we never lock or call into it after construction; Drop is the
+// only use) and Windows HANDLEs / Unix watcher FDs may be released from any
+// thread.
+unsafe impl Send for SendWatchHandle {}
+unsafe impl Sync for SendWatchHandle {}
+
 pub struct Discovery {
     sock: Arc<UdpSocket>,
     ifaces: Arc<Mutex<Vec<SocketAddrV6>>>,
@@ -27,7 +39,7 @@ pub struct Discovery {
     listen_port: u16,
     zid: ZenohId,
     tick: Interval,
-    _sync: Mutex<WatchHandle>,
+    _sync: SendWatchHandle,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -56,7 +68,7 @@ impl Discovery {
         sock.set_multicast_loop_v6(true)?;
         let sock = Arc::new(UdpSocket::from_std(sock.into())?);
         let ifaces: Arc<Mutex<Vec<SocketAddrV6>>> = Default::default();
-        let _sync = Mutex::new(
+        let _sync = SendWatchHandle(
             netwatcher::watch_interfaces_with_callback({
                 let sock = sock.clone();
                 let ifaces = ifaces.clone();

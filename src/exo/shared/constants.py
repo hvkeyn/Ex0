@@ -35,17 +35,17 @@ EXO_DEFAULT_MODELS_DIR = (
 )
 
 
-def _parse_colon_dirs(env_var: str) -> tuple[Path, ...]:
+def _parse_path_list(env_var: str) -> tuple[Path, ...]:
     raw = os.environ.get(env_var, None)
     if raw is None:
         return ()
-    return tuple(Path(p).expanduser() for p in raw.split(":") if p)
+    return tuple(Path(p).expanduser() for p in raw.split(os.pathsep) if p)
 
 
-# Read-only model directories (colon-separated). Never written to or deleted from.
-_EXO_MODELS_READ_ONLY_DIRS_ENV = _parse_colon_dirs("EXO_MODELS_READ_ONLY_DIRS")
-# Writable model directories (colon-separated). Default dir is always prepended.
-_EXO_MODELS_DIRS_ENV = _parse_colon_dirs("EXO_MODELS_DIRS")
+# Read-only model directories (os.pathsep-separated). Never written to or deleted from.
+_EXO_MODELS_READ_ONLY_DIRS_ENV = _parse_path_list("EXO_MODELS_READ_ONLY_DIRS")
+# Writable model directories (os.pathsep-separated). Default dir is always prepended.
+_EXO_MODELS_DIRS_ENV = _parse_path_list("EXO_MODELS_DIRS")
 
 # If a directory appears in both lists, treat it as read-only.
 _read_only_set = frozenset(_EXO_MODELS_READ_ONLY_DIRS_ENV)

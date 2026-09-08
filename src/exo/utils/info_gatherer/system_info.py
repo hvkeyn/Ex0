@@ -13,19 +13,27 @@ def get_os_version() -> str:
     """Return the OS version string for this node.
 
     On macOS this is the macOS version (e.g. ``"15.3"``).
+    On Windows this is ``"Windows 10"`` / ``"Windows 11"``.
     On other platforms it falls back to the platform name (e.g. ``"Linux"``).
     """
     if sys.platform == "darwin":
         version = platform.mac_ver()[0]
         return version if version else "Unknown"
+    if sys.platform == "win32":
+        release = platform.release()
+        return f"Windows {release}" if release else "Windows"
     return platform.system() or "Unknown"
 
 
 async def get_os_build_version() -> str:
-    """Return the macOS build version string (e.g. ``"24D5055b"``).
+    """Return the OS build version string (e.g. ``"24D5055b"`` on macOS).
 
-    On non-macOS platforms, returns ``"Unknown"``.
+    On Windows this is the kernel version (e.g. ``"10.0.19045"``).
+    On other non-macOS platforms, returns ``"Unknown"``.
     """
+    if sys.platform == "win32":
+        return platform.version() or "Unknown"
+
     if sys.platform != "darwin":
         return "Unknown"
 
@@ -123,6 +131,12 @@ async def get_model_and_chip() -> tuple[str, str]:
     chip = "Unknown Chip"
 
     # TODO: better non mac support
+    if sys.platform == "win32":
+        uname = platform.uname()
+        model = f"{uname.system} {uname.release}".strip() or "Windows PC"
+        chip = uname.processor or uname.machine or "Unknown Chip"
+        return (model, chip)
+
     if sys.platform != "darwin":
         return (model, chip)
 

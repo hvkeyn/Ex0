@@ -179,8 +179,8 @@ def test_overlap_between_dirs_and_read_only_dirs():
         for k, v in os.environ.items()
         if k not in ("EXO_MODELS_DIRS", "EXO_MODELS_READ_ONLY_DIRS", "EXO_HOME")
     }
-    env["EXO_MODELS_DIRS"] = "/tmp/shared:/tmp/writable-only"
-    env["EXO_MODELS_READ_ONLY_DIRS"] = "/tmp/shared:/tmp/ro-only"
+    env["EXO_MODELS_DIRS"] = os.pathsep.join(["/tmp/shared", "/tmp/writable-only"])
+    env["EXO_MODELS_READ_ONLY_DIRS"] = os.pathsep.join(["/tmp/shared", "/tmp/ro-only"])
     with mock.patch.dict(os.environ, env, clear=True):
         import importlib
 
